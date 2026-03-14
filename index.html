@@ -2,7 +2,7 @@
 <html>
 <head>
   <title>VR - HUD Menu & Pixel-Sharp Floor</title>
-  <script src="/static/js/aframe.min.js"></script>
+  <script src="aframe.min.js"></script>
 
 <input type="text" id="run" value="0.005" style="display: none;">
 
@@ -15,10 +15,10 @@
     
     // Texture definitions
     var object_textures = [
-      'static/assets/blank.png', 
-      'static/assets/box_texture.png', 
-      'static/assets/sphere_texture.png',
-      'static/assets/metal_tex.png'
+      'blank.png', 
+      'box_texture.png', 
+      'sphere_texture.png',
+      'metal_tex.png'
     ];
     var current_texture = object_textures[0];
     var texture_index = 0;
@@ -26,19 +26,19 @@
 const shapeConfigs = {
   'box': {
     geometry: { primitive: 'box', width: 0.15, height: 0.15, depth: 0.15 },
-    texture: 'static/assets/box_texture.png'
+    texture: 'box_texture.png'
   },
   'sphere': {
     geometry: { primitive: 'sphere', radius: 0.1 },
-    texture: 'static/assets/sphere_texture.png'
+    texture: 'sphere_texture.png'
   },
   'cylinder': {
     geometry: { primitive: 'cylinder', radius: 0.05, height: 0.2 },
-    texture: 'static/assets/metal_tex.png'
+    texture: 'metal_tex.png'
   },
   'cone': {
     geometry: { primitive: 'cone', radius: 0.05, height: 0.2 },
-    texture: 'static/assets/blank.png'
+    texture: 'blank.png'
   },
 'test_hand': {
     isModel: true,
@@ -430,8 +430,8 @@ AFRAME.registerComponent('mode-background', {
 <body>
   <a-scene menu-controller>
     <a-assets>
-      <img id="tile" src="static/assets/floor_tile.png" />
-      <a-asset-item id="custom-model" src="static/assets/test_hand.glb"></a-asset-item>
+      <img id="tile" src="floor_tile.png" />
+      <a-asset-item id="custom-model" src="test_hand.glb"></a-asset-item>
     </a-assets>
     
 
