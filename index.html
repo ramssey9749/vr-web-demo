@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>VR - HUD Menu & Pixel-Sharp Floor</title>
+  <script src="/aframe.min.js"></script>
+  <script>
+    // 1. SHARP TEXTURE COMPONENT (The "Blur Killer")
+    AFRAME.registerComponent('force-sharp', {
+      init: function () {
+        this.el.addEventListener('materialtextureloaded', () => {
+          const mesh = this.el.getObject3D('mesh');
+          if (!mesh || !mesh.material || !mesh.material.map) return;
+          const tex = mesh.material.map;
+          tex.magFilter = THREE.NearestFilter;
+          tex.minFilter = THREE.NearestFilter;
+          tex.generateMipmaps = false; 
+          tex.anisotropy = 16;
+          tex.needsUpdate = true;
+        });
+      }
+    });
+
+    // 2. PHYSICS (Unchanged)
+    AFRAME.registerComponent('manual-physics', {
+      init: function() {
+        this.velocity = new THREE.Vector3(0, 0, 0);
+        this.isGrabbed = false;
+      },
+      tick: function(time, timeDelta) {
+        if (this.isGrabbed) return; 
+        let pos = this.el.getAttribute('position');
+        if (pos.y > 0.05 || this.velocity.y > 0) {
+          this.velocity.y -= 0.000015 * timeDelta;
+          this.velocity.x *= 0.98;
+          this.velocity.z *= 0.98;
+          pos.x += this.velocity.x * timeDelta;
+          pos.y += this.velocity.y * timeDelta;
+          pos.z += this.velocity.z * timeDelta;
+          this.el.setAttribute('position', pos);
+        } else {
+          pos.y = 0.05;
+          this.velocity.set(0, 0, 0);
+          this.el.setAttribute('position', pos);
+        }
+      }
+    });
+
+    // 3. MOVEMENT (Unchanged)
+    AFRAME.registerComponent('vr-move', {
+      init: function() {
+        this.moveSpeed = 0.005; 
+        this.rig = document.querySelector('#rig');
+        this.cam = document.querySelector('a-camera');
+        this.canTurn = true;
+        this.joystickData = { x: 0, y: 0 };
+        this.el.addEventListener('thumbstickmoved', (e) => {
+          if (this.el.id === 'lhand') {
+            this.joystickData.x = e.detail.x;
+            this.joystickData.y = e.detail.y;
+          }
+          if (this.el.id === 'rhand') {
+            let x = e.detail.x;
+            if (Math.abs(x) > 0.5 && this.canTurn) {
+              let rigRot = this.rig.getAttribute('rotation');
+              rigRot.y += (x > 0) ? -45 : 45;
+              this.rig.setAttribute('rotation', rigRot);
+              this.canTurn = false;
+              setTimeout(() => { this.canTurn = true; }, 300);
+            }
+          }
+        });
+      },
+      tick: function(time, timeDelta) {
+        if (this.el.id === 'lhand') {
+          let x = this.joystickData.x;
+          let y = this.joystickData.y;
+          if (Math.abs(x) > 0.1 || Math.abs(y) > 0.1) {
+            let rigRot = this.rig.getAttribute('rotation').y;
+            let camRot = this.cam.getAttribute('rotation').y;
+            let totalAngle = (rigRot + camRot) * (Math.PI / 180);
+            let forward = new THREE.Vector3(-Math.sin(totalAngle), 0, -Math.cos(totalAngle));
+            let right = new THREE.Vector3(Math.cos(totalAngle), 0, -Math.sin(totalAngle));
+            let velocityFactor = this.moveSpeed * timeDelta;
+            let moveVec = forward.multiplyScalar(-y * velocityFactor).add(right.multiplyScalar(x * velocityFactor));
+            let rigPos = this.rig.getAttribute('position');
+            rigPos.x += moveVec.x;
+            rigPos.z += moveVec.z;
+            this.rig.setAttribute('position', rigPos);
+          }
+        }
+      }
+    });
+
+    // 4. MENU CONTROLLER (Fixes Yes/No ghosting)
+    AFRAME.registerComponent('menu-controller', {
+      init: function() {
+        this.menuVisible = false;
+        this.menuEntity = document.querySelector('#ui-menu');
+        this.confirmWindow = document.querySelector('#confirm-window');
+        this.currentMode = 'add';
+        this.currentShape = 'box';
+
+        window.addEventListener('bbuttondown', () => {
+          this.menuVisible = !this.menuVisible;
+          this.menuEntity.setAttribute('visible', this.menuVisible);
+          this.toggleConfirm(false); 
+        });
+      },
+      toggleConfirm: function(show) {
+        this.confirmWindow.setAttribute('visible', show);
+        const confirmBtns = this.confirmWindow.querySelectorAll('.conf-btn');
+        confirmBtns.forEach(btn => {
+          if (show) btn.classList.add('menu-btn');
+          else btn.classList.remove('menu-btn');
+        });
+      },
+      handleAction: function(action) {
+        if (action === 'mode-add') this.currentMode = 'add';
+        if (action === 'mode-del') this.currentMode = 'delete';
+        if (action === 'shape-box') this.currentShape = 'box';
+        if (action === 'shape-sphere') this.currentShape = 'sphere';
+        if (action === 'clear-req') this.toggleConfirm(true);
+        if (action === 'clear-no') this.toggleConfirm(false);
+        if (action === 'clear-yes') {
+          document.querySelectorAll('.spawned').forEach(obj => obj.parentNode.removeChild(obj));
+          this.toggleConfirm(false);
+        }
+      }
+    });
+
+    // 5. BUTTON BEHAVIOR (Improved hit-check)
+    AFRAME.registerComponent('ui-button', {
+      init: function() {
+        this.originalColor = this.el.getAttribute('color');
+        this.el.addEventListener('mouseenter', () => {
+          if (this.el.classList.contains('menu-btn')) this.el.setAttribute('color', '#FFEB3B');
+        });
+        this.el.addEventListener('mouseleave', () => this.el.setAttribute('color', this.originalColor));
+        this.el.addEventListener('click', () => {
+          if (!this.el.classList.contains('menu-btn')) return;
+          const action = this.el.getAttribute('data-action');
+          this.el.sceneEl.components['menu-controller'].handleAction(action);
+          this.el.setAttribute('scale', '1.1 1.1 1.1');
+          setTimeout(() => this.el.setAttribute('scale', '1 1 1'), 100);
+        });
+      }
+    });
+
+    // 6. HAND INTERACTION (Filtered Raycasting)
+    AFRAME.registerComponent('hand-interaction', {
+      init: function() {
+        this.grabbedEl = null;
+        this.prevHandPos = new THREE.Vector3();
+        this.currentHandPos = new THREE.Vector3();
+        
+        this.el.addEventListener('triggerdown', () => {
+          const ray = this.el.components.raycaster;
+          if (!ray || ray.intersectedEls.length === 0) this.onGrab();
+        });
+
+        this.el.addEventListener('triggerup', () => this.onRelease());
+
+        this.el.addEventListener('abuttondown', () => {
+          const menu = this.el.sceneEl.components['menu-controller'];
+          let handPos = new THREE.Vector3();
+          this.el.object3D.getWorldPosition(handPos);
+          if (menu.currentMode === 'add') {
+            let newObj = document.createElement('a-' + menu.currentShape);
+            newObj.classList.add('cube', 'spawned');
+            if(menu.currentShape === 'box') {
+               newObj.setAttribute('width', '0.15'); newObj.setAttribute('height', '0.15'); newObj.setAttribute('depth', '0.15');
+            } else { newObj.setAttribute('radius', '0.08'); }
+            newObj.setAttribute('color', '#FFC65D');
+            newObj.setAttribute('position', handPos);
+            newObj.setAttribute('manual-physics', '');
+            this.el.sceneEl.appendChild(newObj);
+          } else if (menu.currentMode === 'delete') {
+            document.querySelectorAll('.spawned').forEach(obj => {
+              let objPos = new THREE.Vector3();
+              obj.object3D.getWorldPosition(objPos);
+              if (handPos.distanceTo(objPos) < 0.3) obj.parentNode.removeChild(obj);
+            });
+          }
+        });
+      },
+      tick: function() {
+        this.prevHandPos.copy(this.currentHandPos);
+        this.el.object3D.getWorldPosition(this.currentHandPos);
+      },
+      onGrab: function() {
+        let cubes = document.querySelectorAll('.cube');
+        cubes.forEach(cube => {
+          let cubePos = new THREE.Vector3();
+          cube.object3D.getWorldPosition(cubePos);
+          if (this.currentHandPos.distanceTo(cubePos) < 0.25) {
+            this.grabbedEl = cube;
+            this.grabbedEl.components['manual-physics'].isGrabbed = true;
+            this.el.object3D.attach(this.grabbedEl.object3D);
+          }
+        });
+      },
+      onRelease: function() {
+        if (this.grabbedEl) {
+          let throwVec = new THREE.Vector3().subVectors(this.currentHandPos, this.prevHandPos).multiplyScalar(0.8);
+          this.el.sceneEl.object3D.attach(this.grabbedEl.object3D);
+          this.grabbedEl.components['manual-physics'].isGrabbed = false;
+          this.grabbedEl.components['manual-physics'].velocity.copy(throwVec);
+          this.grabbedEl = null;
+        }
+      }
+    });
+  </script>
+</head>
+<body>
+  <a-scene menu-controller>
+    <a-assets>
+      <img id="tile" src="/floor_tile.png" />
+    </a-assets>
+
+    <a-sky color="#111"></a-sky>
+
+    <a-plane 
+        rotation="-90 0 0" 
+        width="80" 
+        height="80" 
+        material="src: #tile; repeat: 160 160; shader: flat; transparent: false"
+        force-sharp>
+    </a-plane>
+
+    <a-entity id="rig" position="0 0 0">
+      <a-camera position="0 1.6 0">
+        <a-entity id="ui-menu" position="0 0 -1.2" visible="false">
+          <a-plane width="0.45" height="0.65" color="#111" opacity="0.9"></a-plane>
+          
+          <a-text value="MODE" position="-0.18 0.25 0.01" scale="0.18 0.18 0.18" color="cyan"></a-text>
+          
+          <a-plane class="menu-btn" ui-button data-action="mode-add" position="-0.1 0.15 0.02" width="0.15" height="0.08" color="#333">
+            <a-text value="ADD" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
+          </a-plane>
+          
+          <a-plane class="menu-btn" ui-button data-action="mode-del" position="0.1 0.15 0.02" width="0.15" height="0.08" color="#333">
+            <a-text value="DEL" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
+          </a-plane>
+
+          <a-text value="SHAPE" position="-0.18 0.02 0.01" scale="0.18 0.18 0.18" color="cyan"></a-text>
+          
+          <a-plane class="menu-btn" ui-button data-action="shape-box" position="-0.1 -0.05 0.02" width="0.15" height="0.08" color="#333">
+            <a-text value="BOX" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
+          </a-plane>
+          
+          <a-plane class="menu-btn" ui-button data-action="shape-sphere" position="0.1 -0.05 0.02" width="0.15" height="0.08" color="#333">
+            <a-text value="BALL" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
+          </a-plane>
+
+          <a-plane class="menu-btn" ui-button data-action="clear-req" position="0 -0.22 0.02" width="0.35" height="0.08" color="#600">
+            <a-text value="ERASE ALL" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
+          </a-plane>
+
+          <a-entity id="confirm-window" visible="false" position="0 0 0.05">
+            <a-plane width="0.4" height="0.25" color="#000"></a-plane>
+            <a-text value="WIPE EVERYTHING?" position="0 0.08 0.01" align="center" scale="0.15 0.15 0.15"></a-text>
+            <a-plane class="conf-btn" ui-button data-action="clear-yes" position="-0.1 -0.05 0.02" width="0.12" height="0.08" color="green">
+              <a-text value="YES" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
+            </a-plane>
+            <a-plane class="conf-btn" ui-button data-action="clear-no" position="0.1 -0.05 0.02" width="0.12" height="0.08" color="red">
+              <a-text value="NO" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
+            </a-plane>
+          </a-entity>
+        </a-entity>
+      </a-camera>
+      
+      <a-entity id="lhand" hand-controls="hand: left" 
+                vr-move hand-interaction
+                cursor="rayOrigin: entity"
+                raycaster="objects: .menu-btn; far: 4; interval: 50" 
+                line="color: white; opacity: 0.1"></a-entity>
+      
+      <a-entity id="rhand" hand-controls="hand: right" 
+                vr-move hand-interaction
+                cursor="rayOrigin: entity"
+                raycaster="objects: .menu-btn; far: 4; interval: 50; showLine: true"
+                line="color: cyan; opacity: 0.6"></a-entity>
+    </a-entity>
+
+    <a-box class="cube" position="0 1 -0.5" width="0.15" height="0.15" depth="0.15" color="#4CC3D9" manual-physics></a-box>
+  </a-scene>
+</body>
+</html>
