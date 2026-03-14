@@ -2,9 +2,73 @@
 <html>
 <head>
   <title>VR - HUD Menu & Pixel-Sharp Floor</title>
-  <script src="aframe.min.js"></script>
+  <script src="/static/js/aframe.min.js"></script>
+
+<style>
+
+.d_in {position: absolute}
+
+</style>
+
+<input class="d_in" type="text" id="run_off" value="0.005">
+<input class="d_in" type="text" id="run_on" value="0.5">
+
+<input class="d_in" type="text" id="run" value="0.005">
+
   <script>
-    // 1. SHARP TEXTURE COMPONENT (The "Blur Killer")
+
+// style="display: none;"
+
+    //
+    var object_colors = ['#FFC65D', '#00FF00', '#FF0000'];
+    var object_color = object_colors[0];
+    var objj_index = 0;
+    
+    // player start cords
+    var player_x = 0;
+    var player_y = 0;
+    var player_z = 0;
+    var player_speeds = ['0.005','0.5'];
+    var player_speed = player_speeds[0]; // for super speed 0.5
+
+
+    // world settings
+    var gravity_bounds = 0.06;
+    var sky_state = "sky_on";
+/*
+ player_speed = document.getElementById("run_on").value = 0.5;
+ player_speed = document.getElementById("run_off").value = 0.005;
+
+player_speed = document.getElementById("run").value = 0.005;
+
+
+
+.addEventListener("click", function() {
+       player_speed = 0.005;
+    });
+
+
+.addEventListener("click", function() {
+       player_speed = 0.5;
+    });
+
+
+    document.getElementById("img_h").addEventListener("change", function() {
+       
+    });
+
+*/
+
+/*
+    if (objj_index === 3) {
+        objj_index = 0
+        
+        } else {
+        objj_index += 1
+        };
+*/
+
+    // 1. SHARP TEXTURE COMPONENT (The "Anti-Blur")
     AFRAME.registerComponent('force-sharp', {
       init: function () {
         this.el.addEventListener('materialtextureloaded', () => {
@@ -20,7 +84,11 @@
       }
     });
 
-    // 2. PHYSICS (Unchanged)
+
+
+
+
+    // 2. PHYSICS
     AFRAME.registerComponent('manual-physics', {
       init: function() {
         this.velocity = new THREE.Vector3(0, 0, 0);
@@ -29,7 +97,7 @@
       tick: function(time, timeDelta) {
         if (this.isGrabbed) return; 
         let pos = this.el.getAttribute('position');
-        if (pos.y > 0.05 || this.velocity.y > 0) {
+        if (pos.y > gravity_bounds || this.velocity.y > 0) {
           this.velocity.y -= 0.000015 * timeDelta;
           this.velocity.x *= 0.98;
           this.velocity.z *= 0.98;
@@ -38,17 +106,17 @@
           pos.z += this.velocity.z * timeDelta;
           this.el.setAttribute('position', pos);
         } else {
-          pos.y = 0.05;
+          pos.y = gravity_bounds;
           this.velocity.set(0, 0, 0);
           this.el.setAttribute('position', pos);
         }
       }
     });
 
-    // 3. MOVEMENT (Unchanged)
+    // 3. MOVEMENT
     AFRAME.registerComponent('vr-move', {
       init: function() {
-        this.moveSpeed = 0.005; 
+        this.moveSpeed = document.getElementById("run").value; 
         this.rig = document.querySelector('#rig');
         this.cam = document.querySelector('a-camera');
         this.canTurn = true;
@@ -71,6 +139,9 @@
         });
       },
       tick: function(time, timeDelta) {
+
+        this.moveSpeed = parseFloat(document.getElementById("run").value); 
+
         if (this.el.id === 'lhand') {
           let x = this.joystickData.x;
           let y = this.joystickData.y;
@@ -85,18 +156,24 @@
             let rigPos = this.rig.getAttribute('position');
             rigPos.x += moveVec.x;
             rigPos.z += moveVec.z;
+            rigPos.y = player_y;
             this.rig.setAttribute('position', rigPos);
           }
         }
       }
     });
 
-    // 4. MENU CONTROLLER (Fixes Yes/No ghosting)
+
+
+    // 4. MENU CONTROLLER
     AFRAME.registerComponent('menu-controller', {
       init: function() {
         this.menuVisible = false;
+        this.menu2Visible = false;
         this.menuEntity = document.querySelector('#ui-menu');
+        this.menu2Entity = document.querySelector('#ui-menu2');
         this.confirmWindow = document.querySelector('#confirm-window');
+        this.current_sky_Mode = 'sky-on';
         this.currentMode = 'add';
         this.currentShape = 'box';
 
@@ -105,6 +182,13 @@
           this.menuEntity.setAttribute('visible', this.menuVisible);
           this.toggleConfirm(false); 
         });
+
+        window.addEventListener('ybuttondown', () => {
+          this.menu2Visible = !this.menu2Visible;
+          this.menu2Entity.setAttribute('visible', this.menu2Visible);
+          this.toggleConfirm(false); 
+        });
+
       },
       toggleConfirm: function(show) {
         this.confirmWindow.setAttribute('visible', show);
@@ -115,10 +199,21 @@
         });
       },
       handleAction: function(action) {
+        //objj_index = 0;
+        if (action === 'sky-on') {document.querySelector('a-sky').setAttribute('visible', true);}
+        if (action === 'sky-off') {document.querySelector('a-sky').setAttribute('visible', false);}
+
+        
+        if (action === 'run-on') {document.getElementById("run").value = "0.5";} // High speed}
+        if (action === 'run-off') {document.getElementById("run").value = "0.005";} // Normal speed}
+
         if (action === 'mode-add') this.currentMode = 'add';
         if (action === 'mode-del') this.currentMode = 'delete';
         if (action === 'shape-box') this.currentShape = 'box';
         if (action === 'shape-sphere') this.currentShape = 'sphere';
+        //if (action === 'shape-c-coin') this.currentShape = 'c-coin';
+        //if (action === 'shape-s-coin') this.currentShape = 's-coin';
+        //if (action === 'shape-g-coin') this.currentShape = 'g-coin';
         if (action === 'clear-req') this.toggleConfirm(true);
         if (action === 'clear-no') this.toggleConfirm(false);
         if (action === 'clear-yes') {
@@ -128,7 +223,8 @@
       }
     });
 
-    // 5. BUTTON BEHAVIOR (Improved hit-check)
+
+    // 5. BUTTON BEHAVIOR
     AFRAME.registerComponent('ui-button', {
       init: function() {
         this.originalColor = this.el.getAttribute('color');
@@ -146,6 +242,8 @@
       }
     });
 
+
+
     // 6. HAND INTERACTION (Filtered Raycasting)
     AFRAME.registerComponent('hand-interaction', {
       init: function() {
@@ -162,6 +260,7 @@
 
         this.el.addEventListener('abuttondown', () => {
           const menu = this.el.sceneEl.components['menu-controller'];
+
           let handPos = new THREE.Vector3();
           this.el.object3D.getWorldPosition(handPos);
           if (menu.currentMode === 'add') {
@@ -170,7 +269,7 @@
             if(menu.currentShape === 'box') {
                newObj.setAttribute('width', '0.15'); newObj.setAttribute('height', '0.15'); newObj.setAttribute('depth', '0.15');
             } else { newObj.setAttribute('radius', '0.08'); }
-            newObj.setAttribute('color', '#FFC65D');
+            newObj.setAttribute('color', object_color);
             newObj.setAttribute('position', handPos);
             newObj.setAttribute('manual-physics', '');
             this.el.sceneEl.appendChild(newObj);
@@ -182,6 +281,30 @@
             });
           }
         });
+
+        this.el.addEventListener('xbuttondown', () => {
+          const menu = this.el.sceneEl.components['menu-controller'];
+          let handPos = new THREE.Vector3();
+          this.el.object3D.getWorldPosition(handPos);
+          if (menu.currentMode === 'add') {
+            let newObj = document.createElement('a-' + menu.currentShape);
+            newObj.classList.add('cube', 'spawned');
+            if(menu.currentShape === 'box') {
+               newObj.setAttribute('width', '0.15'); newObj.setAttribute('height', '0.15'); newObj.setAttribute('depth', '0.15');
+            } else { newObj.setAttribute('radius', '0.08'); }
+            newObj.setAttribute('color', object_color);
+            newObj.setAttribute('position', handPos);
+            newObj.setAttribute('manual-physics', '');
+            this.el.sceneEl.appendChild(newObj);
+          } else if (menu.currentMode === 'delete') {
+            document.querySelectorAll('.spawned').forEach(obj => {
+              let objPos = new THREE.Vector3();
+              obj.object3D.getWorldPosition(objPos);
+              if (handPos.distanceTo(objPos) < 0.3) obj.parentNode.removeChild(obj);
+            });
+          }
+        });
+
       },
       tick: function() {
         this.prevHandPos.copy(this.currentHandPos);
@@ -209,52 +332,149 @@
         }
       }
     });
+
+//sky.setAttribute('material', {visible: true, color: 'black', transparent: false});
+
+
+
+/*
+
+AFRAME.registerComponent('mode-background', {
+  init: function () {
+    const sky = this.el;
+    const sceneEl = this.el.sceneEl;
+
+    sceneEl.addEventListener('enter-vr', () => {
+      if (sceneEl.is('ar-mode')) {
+        // In AR, we want the sky hidden so we see the room
+        sky.setAttribute('visible', false);
+      } else {
+        // In VR, we want it visible and black
+        sky.setAttribute('material', {color: 'black', transparent: false});
+        sky.setAttribute('visible', true);
+      }
+    });
+  }
+});
+
+*/
+
+
+
+
+AFRAME.registerComponent('mode-background', {
+  init: function () {
+    const sky = this.el;
+    const sceneEl = this.el.sceneEl;
+
+    //sky.setAttribute('material', {visible: true, color: 'black'});
+
+    // Listen for when the user enters a VR or AR session
+    sceneEl.addEventListener('enter-vr', () => {
+      // Check if the current session is AR (Passthrough)
+      if (sceneEl.is('ar-mode')) {
+        //sky.setAttribute('material', 'visible', true); // need to add a button to toggle this on and off
+        sky.setAttribute('material', {visible: true, color: 'black'});
+      } else {
+        // Otherwise, it's VR mode
+        sky.setAttribute('material', {visible: true, color: 'black', transparent: false});
+      }});
+    // Reset when exiting back to the 2D browser
+    sceneEl.addEventListener('exit-vr', () => {sky.setAttribute('material', {visible: true, color: 'black'});});
+  }});
+
+
+
+
+
+
+// sky_state = "sky_on";
+
+/*
+sky_state.addEventListener('onchange', () => {
+
+//this.current_sky_Mode = 'sky-on';
+if (menu.current_sky_Mode === 'sky-on') {
+sky.setAttribute('material', {visible: true, color: 'black'});
+} else {
+if (menu.current_sky_Mode === 'sky-off') {
+sky.setAttribute('material', {visible: false, color: 'black'});
+}}});
+*/
+
+
+
+// <a-sky color="#111"></a-sky>
+//<a-sky mode-background></a-sky>
+//<a-sphere mode-background class="sky" position="0 1 -0.5" width="0.15" height="-0.15" depth="0.15" color="black"></a-sphere>
   </script>
 </head>
 <body>
   <a-scene menu-controller>
     <a-assets>
-      <img id="tile" src="floor_tile.png" />
+      <img id="tile" src="static/assets/floor_tile.png" />
     </a-assets>
 
-    <a-sky color="#111"></a-sky>
+    
 
     <a-plane 
         rotation="-90 0 0" 
         width="80" 
         height="80" 
-        material="src: #tile; repeat: 160 160; shader: flat; transparent: false"
+        material="src: #tile; repeat: 160 160; shader: flat; transparent: true"
         force-sharp>
     </a-plane>
 
     <a-entity id="rig" position="0 0 0">
       <a-camera position="0 1.6 0">
+
+<a-entity >
+
         <a-entity id="ui-menu" position="0 0 -1.2" visible="false">
-          <a-plane width="0.45" height="0.65" color="#111" opacity="0.9"></a-plane>
+          <a-plane width="0.85" height="0.65" color="#111" opacity="0.9"></a-plane>
           
-          <a-text value="MODE" position="-0.18 0.25 0.01" scale="0.18 0.18 0.18" color="cyan"></a-text>
+          <a-text value="MODE" position="0.018 0.25 0.01" scale="0.18 0.18 0.18" color="cyan"></a-text>
+          <a-text value="SKY" position="-0.38 0.25 0.01" scale="0.18 0.18 0.18" color="cyan"></a-text>
           
-          <a-plane class="menu-btn" ui-button data-action="mode-add" position="-0.1 0.15 0.02" width="0.15" height="0.08" color="#333">
-            <a-text value="ADD" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
-          </a-plane>
-          
-          <a-plane class="menu-btn" ui-button data-action="mode-del" position="0.1 0.15 0.02" width="0.15" height="0.08" color="#333">
+          <a-plane class="menu-btn" ui-button data-action="mode-del" position="0.3 0.15 0.02" width="0.15" height="0.08" color="#333">
             <a-text value="DEL" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
           </a-plane>
-
-          <a-text value="SHAPE" position="-0.18 0.02 0.01" scale="0.18 0.18 0.18" color="cyan"></a-text>
           
-          <a-plane class="menu-btn" ui-button data-action="shape-box" position="-0.1 -0.05 0.02" width="0.15" height="0.08" color="#333">
+          <a-plane class="menu-btn" ui-button data-action="mode-add" position="0.1 0.15 0.02" width="0.15" height="0.08" color="#333">
+            <a-text value="ADD" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
+          </a-plane>
+
+          <a-text value="SHAPE" position="0.018 0.02 0.01" scale="0.18 0.18 0.18" color="cyan"></a-text>
+          <a-text value="player speed" position="-0.38 0.02 0.01" scale="0.18 0.18 0.18" color="cyan"></a-text>
+
+          <a-plane class="menu-btn" ui-button data-action="shape-box" position="0.1 -0.05 0.02" width="0.15" height="0.08" color="#333">
             <a-text value="BOX" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
           </a-plane>
           
-          <a-plane class="menu-btn" ui-button data-action="shape-sphere" position="0.1 -0.05 0.02" width="0.15" height="0.08" color="#333">
+          <a-plane class="menu-btn" ui-button data-action="shape-sphere" position="0.3 -0.05 0.02" width="0.15" height="0.08" color="#333">
             <a-text value="BALL" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
           </a-plane>
 
-          <a-plane class="menu-btn" ui-button data-action="clear-req" position="0 -0.22 0.02" width="0.35" height="0.08" color="#600">
+          <a-plane class="menu-btn" ui-button data-action="clear-req" position="0.2 -0.22 0.02" width="0.35" height="0.08" color="red">
             <a-text value="ERASE ALL" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
           </a-plane>
+
+          <a-plane class="menu-btn" ui-button data-action="sky-on" position="-0.3 0.15 0.02" width="0.15" height="0.08" color="#333">
+            <a-text value="sky on" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
+          </a-plane>
+          
+          <a-plane class="menu-btn" ui-button data-action="sky-off" position="-0.1 0.15 0.02" width="0.15" height="0.08" color="#333">
+            <a-text value="sky off" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
+          </a-plane>
+
+          <a-plane class="menu-btn" id="run_on" ui-button data-action="run-on" position="-0.3 -0.05 0.02" width="0.15" height="0.08" color="#333">
+            <a-text value="run on" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
+          </a-plane>
+          
+          <a-plane class="menu-btn" id="run_off" ui-button data-action="run-off" position="-0.1 -0.05 0.02" width="0.15" height="0.08" color="#333">
+            <a-text value="run off" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
+          </a-plane>
+
 
           <a-entity id="confirm-window" visible="false" position="0 0 0.05">
             <a-plane width="0.4" height="0.25" color="#000"></a-plane>
@@ -262,17 +482,29 @@
             <a-plane class="conf-btn" ui-button data-action="clear-yes" position="-0.1 -0.05 0.02" width="0.12" height="0.08" color="green">
               <a-text value="YES" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
             </a-plane>
+
             <a-plane class="conf-btn" ui-button data-action="clear-no" position="0.1 -0.05 0.02" width="0.12" height="0.08" color="red">
               <a-text value="NO" align="center" scale="0.15 0.15 0.15" position="0 0 0.001"></a-text>
             </a-plane>
           </a-entity>
+
+
+
+<a-entity id="ui-menu2" position="0 0 -1.2" visible="true">
+          <a-plane width="0.45" height="0.65" color="#111" opacity="0.9"></a-plane>
+          
+          <a-text value="SETTINGS" position="-0.18 0.25 0.01" scale="0.18 0.18 0.18" color="cyan"></a-text>
+          
+
+</a-entity>
+
         </a-entity>
       </a-camera>
       
       <a-entity id="lhand" hand-controls="hand: left" 
                 vr-move hand-interaction
                 cursor="rayOrigin: entity"
-                raycaster="objects: .menu-btn; far: 4; interval: 50" 
+                raycaster="objects: .menu-btn; far: 4; interval: 50; showLine: true" 
                 line="color: white; opacity: 0.1"></a-entity>
       
       <a-entity id="rhand" hand-controls="hand: right" 
@@ -283,6 +515,9 @@
     </a-entity>
 
     <a-box class="cube" position="0 1 -0.5" width="0.15" height="0.15" depth="0.15" color="#4CC3D9" manual-physics></a-box>
+    
+    <a-sky mode-background position="0 1 -0.5" width="0.15" height="-0.15" depth="0.15" color="black" transparent="true"></a-sky>
   </a-scene>
+
 </body>
 </html>
